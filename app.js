@@ -776,7 +776,7 @@ function renderDonut(canvasId, data) {
         legend: {
           position: 'right',
           labels: {
-            color: '#a0a0a0',
+            color: '#e0e0e0',
             font: { size: 11, family: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' },
             padding: 12, usePointStyle: true, pointStyleWidth: 8,
             generateLabels: (chart) => {
@@ -886,9 +886,10 @@ function renderTable() {
       <td class="td-favorecido" title="${escHtml(tx.favorecido || '')}">${escHtml(tx.favorecido || '') || '—'}</td>
       ${showBankCol ? `<td class="td-bank">${bankDot}${bankName}</td>` : ''}
       <td>
-        <span class="badge-tipo ${tx.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida'}">
-          ${tx.tipo === 'entrada' ? '▲' : '▼'} ${tx.tipo}
-        </span>
+        <select class="tipo-inline-select ${tx.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida'}" data-id="${tx.id}">
+          <option value="entrada"${tx.tipo === 'entrada' ? ' selected' : ''}>▲ entrada</option>
+          <option value="saída"${tx.tipo === 'saída' ? ' selected' : ''}>▼ saída</option>
+        </select>
       </td>
       <td class="td-cat-cell">
         <select class="cat-inline-select" data-id="${tx.id}">
@@ -920,6 +921,19 @@ function renderTable() {
       e.target.classList.add('cat-saved');
       setTimeout(() => e.target.classList.remove('cat-saved'), 600);
       // Re-render only charts and KPIs (not the whole table to avoid losing focus)
+      applyFilters();
+    });
+  });
+
+  // Inline tipo change
+  tbody.querySelectorAll('.tipo-inline-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const id = Number(e.target.dataset.id);
+      const tx = state.allTransactions.find(t => t.id === id);
+      if (!tx) return;
+      tx.tipo = e.target.value;
+      e.target.className = `tipo-inline-select ${tx.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida'} cat-saved`;
+      setTimeout(() => e.target.classList.remove('cat-saved'), 600);
       applyFilters();
     });
   });

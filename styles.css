@@ -1009,6 +1009,36 @@ body {
   background-color: rgba(34,197,94,0.1);
 }
 
+/* ============================================================
+   INLINE TIPO SELECT
+   ============================================================ */
+.tipo-inline-select {
+  border-radius: 20px;
+  padding: 0.22rem 1.2rem 0.22rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  appearance: none;
+  border: 1px solid;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+.tipo-inline-select.tipo-entrada {
+  background: rgba(34,197,94,0.12);
+  border-color: rgba(34,197,94,0.35);
+  color: var(--positive);
+}
+.tipo-inline-select.tipo-saida {
+  background: rgba(244,63,94,0.12);
+  border-color: rgba(244,63,94,0.35);
+  color: var(--negative);
+}
+.tipo-inline-select:hover { opacity: 0.85; }
+.tipo-inline-select option { background: #1a1a1a; color: var(--text-primary); }
+.tipo-inline-select.cat-saved {
+  border-color: var(--positive);
+  background-color: rgba(34,197,94,0.1);
+}
+
 /* Bank column in table */
 .td-bank {
   color: var(--text-muted);
