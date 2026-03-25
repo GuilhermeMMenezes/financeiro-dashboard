@@ -564,9 +564,9 @@ function tryParseTransactionLine(lineText, idx) {
 
 function detectTipoFromText(lineText, desc) {
   const t = lineText.toLowerCase();
-  if (/créd|credito|entrada|recebido|recebimento|depósito|deposito/.test(t)) return 'entrada';
-  if (/déb|debito|saída|saida|pagamento|retirada/.test(t)) return 'saída';
-  const entradaKw = ['recebido','recebimento','deposito','depósito','pix receb','ted receb'];
+  if (/créd|credito|entrada|recebido|recebimento|depósito|deposito|cielo vendas|stone pagamento|rende fácil\s*\(?\+/.test(t)) return 'entrada';
+  if (/déb|debito|saída|saida|pagamento|retirada|enviado|boleto|tarifa|pgto/.test(t)) return 'saída';
+  const entradaKw = ['recebido','recebimento','deposito','depósito','pix receb','ted receb','cielo vendas','stone pagto'];
   if (entradaKw.some(k => desc.toLowerCase().includes(k))) return 'entrada';
   return 'saída';
 }
@@ -591,6 +591,12 @@ function autoCategorize(text, tipo) {
 function parseBRNumber(str) {
   if (!str || str === '' || str === '-') return 0;
   let s = String(str).replace(/[R$\s]/g, '').trim();
+
+  // Detecta notação Banco do Brasil: "1.000,00(-)" ou "1.000,00(+)"
+  const bbNegative = s.includes('(-)') || s.includes('- ') ;
+  const bbPositive = s.includes('(+)');
+  s = s.replace(/[()+]/g, '').replace('--', '').replace('- ', '');
+
   if (s.includes(',') && s.includes('.')) {
     const lastComma = s.lastIndexOf(',');
     const lastDot   = s.lastIndexOf('.');
@@ -598,7 +604,11 @@ function parseBRNumber(str) {
   } else if (s.includes(',')) {
     s = s.replace(',', '.');
   }
-  return parseFloat(s) || 0;
+
+  const num = parseFloat(s) || 0;
+  if (bbNegative) return -Math.abs(num);
+  if (bbPositive) return Math.abs(num);
+  return num;
 }
 
 function normalizeDate(raw) {
