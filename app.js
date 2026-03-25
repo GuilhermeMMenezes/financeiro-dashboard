@@ -416,11 +416,12 @@ function buildTransaction(row, colMap, idx) {
   } else if (rawValor) {
     const rawV = parseBRNumber(rawValor);
     valor = Math.abs(rawV);
-    if (rawTipo) {
+    if (rawV !== 0) {
+      // Sinal do número tem prioridade absoluta: negativo = saída, positivo = entrada
+      tipo = rawV < 0 ? 'saída' : 'entrada';
+    } else if (rawTipo) {
       const t = rawTipo.toLowerCase();
       tipo = (t.includes('créd') || t.includes('cred') || t.includes('entrada') || t.includes('rec')) ? 'entrada' : 'saída';
-    } else {
-      tipo = rawV >= 0 ? 'entrada' : 'saída';
     }
   }
 
