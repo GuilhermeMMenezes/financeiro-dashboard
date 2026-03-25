@@ -1253,22 +1253,43 @@ async function classifyBatch(batch, examples, apiKey) {
   ).join('\n');
 
   const prompt =
-`Você é um classificador financeiro para uma empresa brasileira. Classifique cada transação.
+`Você é um classificador financeiro para uma empresa brasileira. Classifique cada transação abaixo.
 
-CATEGORIAS: Fornecedores, Funcionários, Impostos, Marketing, Mídia, Aluguel, Plataforma / Sistemas, Taxas Bancárias, Transferências, Retiradas, Pró-labore, Clientes / Recebimentos, Outros
+## REGRA DE CLASSIFICAÇÃO — ENTRADA vs SAÍDA
 
-REGRAS:
-- tipo "entrada" = dinheiro ENTRANDO (recebimento, depósito, PIX recebido, transferência recebida)
-- tipo "saída"   = dinheiro SAINDO (pagamento, débito, PIX enviado, transferência enviada)
-- Se contiver "recebido", "crédito", "depósito" → entrada
-- Se contiver "enviado", "débito", "pagamento", "cobrança" → saída
-- Salário/funcionário → Funcionários (saída)
-- DARF, INSS, FGTS, Simples Nacional → Impostos (saída)
-- Fornecedor, nota fiscal → Fornecedores (saída)
-- Netflix, Spotify, AWS, software → Plataforma / Sistemas (saída)
-- Tarifa banco, IOF, anuidade → Taxas Bancárias${examplesBlock}
+ENTRADA = dinheiro ENTRANDO na conta:
+- PIX RECEBIDO, TED RECEBIDA, DOC RECEBIDO, BOLETO RECEBIDO → ENTRADA
+- DEPÓSITO RECEBIDO, TRANSFERÊNCIA RECEBIDA → ENTRADA
+- CRÉDITO, RECEBIMENTO, ESTORNO RECEBIDO → ENTRADA
 
-TRANSAÇÕES:
+SAÍDA = dinheiro SAINDO da conta:
+- PIX ENVIADO, TED ENVIADA, DOC ENVIADO → SAÍDA
+- PAGAMENTO DE BOLETO, DÉBITO → SAÍDA
+- TARIFA BANCÁRIA, IMPOSTO, TAXA, SAQUE → SAÍDA
+- COMPRA, PAGAMENTO, TRANSFERÊNCIA ENVIADA → SAÍDA
+
+ORDEM DE PRIORIDADE para determinar o tipo:
+1. Palavras-chave explícitas na descrição (recebido/enviado/pago/tarifa etc.)
+2. Sinal do valor fornecido (se negativo = saída, se positivo = entrada)
+3. Contexto geral da operação
+NUNCA inverta entrada e saída. Em caso de dúvida real, use tipo "saída".
+
+## CATEGORIAS DISPONÍVEIS
+Fornecedores, Funcionários, Impostos, Marketing, Mídia, Aluguel, Plataforma / Sistemas, Taxas Bancárias, Transferências, Retiradas, Pró-labore, Clientes / Recebimentos, Outros
+
+## REGRAS DE CATEGORIA
+- Salário, folha, holerite, rescisão, FGTS, férias → Funcionários (saída)
+- DARF, INSS, Simples Nacional, IRPJ, CSLL, ISS → Impostos (saída)
+- Fornecedor, nota fiscal, NF-e → Fornecedores (saída)
+- Netflix, Spotify, AWS, Adobe, software, SaaS → Plataforma / Sistemas (saída)
+- Tarifa banco, IOF, anuidade, taxa bancária → Taxas Bancárias (saída)
+- Aluguel, locação, condomínio → Aluguel (saída)
+- Google Ads, Meta Ads, marketing, publicidade → Marketing (saída)
+- Recebimento de cliente, cobrança paga, venda → Clientes / Recebimentos (entrada)
+- Pro labore, pró-labore → Pró-labore (saída)
+- Saque, retirada → Retiradas (saída)${examplesBlock}
+
+## TRANSAÇÕES
 ${txList}
 
 Responda SOMENTE com JSON array (sem texto extra):
