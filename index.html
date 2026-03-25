@@ -185,6 +185,20 @@
               </svg>
               <input type="text" id="search-input" placeholder="Buscar transação..." class="search-input" />
             </div>
+            <button class="btn-ai btn-sm" id="btn-classify-ai" title="Classificar tipo e categoria com Inteligência Artificial">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Classificar com IA
+            </button>
+            <button class="btn-outline btn-sm btn-icon-only" id="btn-ai-settings" title="Configurar chave da API de IA">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
             <button class="btn-outline btn-sm" id="btn-export">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -314,6 +328,39 @@
       <div class="modal-footer">
         <button class="btn-ghost" id="rename-cancel">Cancelar</button>
         <button class="btn-primary" id="rename-save">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI KEY MODAL -->
+  <div id="ai-key-modal" class="modal-overlay hidden">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h3>Configurar IA de Classificação</h3>
+        <button class="modal-close" onclick="document.getElementById('ai-key-modal').classList.add('hidden')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="ai-info-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p>A IA usa o modelo Claude (Anthropic) para classificar tipo (entrada/saída) e categoria de cada transação. Ela aprende com suas correções ao longo do tempo.</p>
+        </div>
+        <div class="form-group" style="margin-top:1rem">
+          <label>Chave da API Anthropic</label>
+          <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-..." autocomplete="off" />
+          <span class="form-hint">Sua chave fica salva <strong>apenas no seu navegador</strong> (localStorage). Nunca é enviada a nenhum servidor além da Anthropic.</span>
+        </div>
+        <div class="ai-learning-info" id="ai-learning-info"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="document.getElementById('ai-key-modal').classList.add('hidden')">Cancelar</button>
+        <button class="btn-ghost btn-danger-sm" id="btn-clear-learning" title="Apagar todos os exemplos de aprendizado">Limpar Aprendizado</button>
+        <button class="btn-primary" id="btn-save-ai-key">Salvar e Classificar</button>
       </div>
     </div>
   </div>

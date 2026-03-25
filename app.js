@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSearch();
   setupSort();
   setupExport();
+  setupAI();
   $('#btn-reset-all').addEventListener('click', confirmReset);
 });
 
@@ -910,28 +911,28 @@ function renderTable() {
     tbody.appendChild(tr);
   });
 
-  // Inline category change — updates charts immediately
+  // Inline category change — updates charts immediately + saves AI learning
   tbody.querySelectorAll('.cat-inline-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
       const id  = Number(e.target.dataset.id);
       const tx  = state.allTransactions.find(t => t.id === id);
       if (!tx) return;
       tx.categoria = e.target.value;
-      // Flash the select to confirm
+      addAiLearningExample(tx);
       e.target.classList.add('cat-saved');
       setTimeout(() => e.target.classList.remove('cat-saved'), 600);
-      // Re-render only charts and KPIs (not the whole table to avoid losing focus)
       applyFilters();
     });
   });
 
-  // Inline tipo change
+  // Inline tipo change + saves AI learning
   tbody.querySelectorAll('.tipo-inline-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
       const id = Number(e.target.dataset.id);
       const tx = state.allTransactions.find(t => t.id === id);
       if (!tx) return;
       tx.tipo = e.target.value;
+      addAiLearningExample(tx);
       e.target.className = `tipo-inline-select ${tx.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida'} cat-saved`;
       setTimeout(() => e.target.classList.remove('cat-saved'), 600);
       applyFilters();
@@ -1021,6 +1022,7 @@ function saveEdit() {
   tx.valor        = Math.abs(parseFloat($('#edit-valor').value) || 0);
   tx.obs          = $('#edit-obs').value.trim();
 
+  addAiLearningExample(tx);
   applyFilters();
   closeModal();
   showToast('Transação atualizada!', 'success');
@@ -1112,4 +1114,195 @@ function escHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// AI CLASSIFICATION
+// ============================================================
+const AI_KEY_STORAGE      = 'fin_ai_key';
+const AI_LEARNING_STORAGE = 'fin_ai_learning';
+
+function getAiLearning() {
+  try { return JSON.parse(localStorage.getItem(AI_LEARNING_STORAGE) || '[]'); }
+  catch { return []; }
+}
+
+function saveAiLearning(examples) {
+  localStorage.setItem(AI_LEARNING_STORAGE, JSON.stringify(examples.slice(0, 150)));
+}
+
+// Called every time user manually corrects tipo or categoria
+function addAiLearningExample(tx) {
+  const examples = getAiLearning();
+  const key = (tx.descricao || '') + '|' + (tx.favorecido || '');
+  const idx = examples.findIndex(e => (e.descricao || '') + '|' + (e.favorecido || '') === key);
+  const entry = {
+    descricao:  tx.descricao  || '',
+    favorecido: tx.favorecido || '',
+    tipo:       tx.tipo       || 'saída',
+    categoria:  tx.categoria  || 'Outros',
+  };
+  if (idx >= 0) examples[idx] = entry;
+  else examples.unshift(entry);
+  saveAiLearning(examples);
+}
+
+function openAiKeyModal() {
+  const modal = $('#ai-key-modal');
+  $('#ai-key-input').value = localStorage.getItem(AI_KEY_STORAGE) || '';
+  // Show learning count
+  const count = getAiLearning().length;
+  const info  = $('#ai-learning-info');
+  info.textContent = count > 0
+    ? `🧠 ${count} exemplo${count !== 1 ? 's' : ''} de aprendizado salvos — a IA usará eles para classificar melhor.`
+    : '';
+  modal.classList.remove('hidden');
+  setTimeout(() => $('#ai-key-input').focus(), 50);
+}
+
+function saveAiKey() {
+  const key = $('#ai-key-input').value.trim();
+  if (!key.startsWith('sk-ant-')) {
+    showToast('Chave inválida. Deve começar com sk-ant-', 'error');
+    return;
+  }
+  localStorage.setItem(AI_KEY_STORAGE, key);
+  $('#ai-key-modal').classList.add('hidden');
+  classifyWithAI();
+}
+
+function setupAI() {
+  $('#btn-classify-ai').addEventListener('click', () => {
+    const key = localStorage.getItem(AI_KEY_STORAGE);
+    if (!key) openAiKeyModal();
+    else classifyWithAI();
+  });
+
+  $('#btn-ai-settings').addEventListener('click', openAiKeyModal);
+
+  $('#btn-save-ai-key').addEventListener('click', saveAiKey);
+
+  $('#ai-key-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveAiKey();
+  });
+
+  $('#btn-clear-learning').addEventListener('click', () => {
+    if (!confirm('Apagar todos os exemplos de aprendizado?')) return;
+    localStorage.removeItem(AI_LEARNING_STORAGE);
+    showToast('Aprendizado limpo.');
+    $('#ai-learning-info').textContent = '';
+  });
+}
+
+async function classifyWithAI() {
+  const key = localStorage.getItem(AI_KEY_STORAGE);
+  if (!key) { openAiKeyModal(); return; }
+
+  const txs = state.allTransactions;
+  if (!txs.length) { showToast('Importe um extrato primeiro.', 'error'); return; }
+
+  const btn = $('#btn-classify-ai');
+  btn.disabled = true;
+
+  const examples  = getAiLearning().slice(0, 30);
+  const BATCH_SZ  = 30;
+  let processed = 0;
+
+  try {
+    for (let i = 0; i < txs.length; i += BATCH_SZ) {
+      const batch = txs.slice(i, i + BATCH_SZ);
+      await classifyBatch(batch, examples, key);
+      processed += batch.length;
+      btn.textContent = `Classificando ${Math.min(processed, txs.length)}/${txs.length}...`;
+    }
+    applyFilters();
+    showToast(`✓ ${txs.length} transações classificadas com IA!`, 'success');
+  } catch (err) {
+    console.error('[AI]', err);
+    const msg = err.message || '';
+    if (msg.includes('401') || msg.includes('authentication')) {
+      showToast('Chave de API inválida. Clique em ⚙ para corrigir.', 'error');
+      localStorage.removeItem(AI_KEY_STORAGE);
+    } else {
+      showToast('Erro na IA: ' + msg.slice(0, 80), 'error');
+    }
+    if (processed > 0) applyFilters(); // apply partial results
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg> Classificar com IA`;
+  }
+}
+
+async function classifyBatch(batch, examples, apiKey) {
+  // Build few-shot examples block from user corrections
+  let examplesBlock = '';
+  if (examples.length > 0) {
+    examplesBlock = '\n\nCORREÇÕES FEITAS PELO USUÁRIO (aprenda com estes padrões da empresa):\n';
+    examples.forEach(e => {
+      examplesBlock += `- "${e.descricao}"${e.favorecido ? ` | fav: "${e.favorecido}"` : ''} → tipo: ${e.tipo}, categoria: ${e.categoria}\n`;
+    });
+  }
+
+  const txList = batch.map((tx, i) =>
+    `${i + 1}. desc="${tx.descricao || ''}" | fav="${tx.favorecido || ''}" | R$${tx.valor}`
+  ).join('\n');
+
+  const prompt =
+`Você é um classificador financeiro para uma empresa brasileira. Classifique cada transação.
+
+CATEGORIAS: Fornecedores, Funcionários, Impostos, Marketing, Mídia, Aluguel, Plataforma / Sistemas, Taxas Bancárias, Transferências, Retiradas, Pró-labore, Clientes / Recebimentos, Outros
+
+REGRAS:
+- tipo "entrada" = dinheiro ENTRANDO (recebimento, depósito, PIX recebido, transferência recebida)
+- tipo "saída"   = dinheiro SAINDO (pagamento, débito, PIX enviado, transferência enviada)
+- Se contiver "recebido", "crédito", "depósito" → entrada
+- Se contiver "enviado", "débito", "pagamento", "cobrança" → saída
+- Salário/funcionário → Funcionários (saída)
+- DARF, INSS, FGTS, Simples Nacional → Impostos (saída)
+- Fornecedor, nota fiscal → Fornecedores (saída)
+- Netflix, Spotify, AWS, software → Plataforma / Sistemas (saída)
+- Tarifa banco, IOF, anuidade → Taxas Bancárias${examplesBlock}
+
+TRANSAÇÕES:
+${txList}
+
+Responda SOMENTE com JSON array (sem texto extra):
+[{"i":1,"tipo":"saída","cat":"Fornecedores"},{"i":2,"tipo":"entrada","cat":"Clientes / Recebimentos"},...]`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'x-api-key':     apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model:      'claude-haiku-4-5',
+      max_tokens: 2048,
+      messages:   [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+
+  const data   = await res.json();
+  const text   = data.content?.[0]?.text || '';
+  const match  = text.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error('Resposta inesperada da IA');
+
+  const results = JSON.parse(match[0]);
+  results.forEach(r => {
+    const tx = batch[r.i - 1];
+    if (!tx) return;
+    if (r.tipo === 'entrada' || r.tipo === 'saída') tx.tipo = r.tipo;
+    if (CATEGORIES.includes(r.cat)) tx.categoria = r.cat;
+  });
 }
