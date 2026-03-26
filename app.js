@@ -28,10 +28,16 @@ const CATEGORIES = [
 ];
 
 // Linhas informativas do BB que devem ser ignoradas no import
+// Usados contra descricao (CSV) e contra lineText completo (texto/PDF)
 const BB_SKIP_PATTERNS = [
-  /^saldo anterior$/i, /^s\s*a\s*l\s*d\s*o$/i, /^saldo do dia$/i,
-  /^juros/i, /^iof/i, /^data de d[eé]bito/i, /invest\.\s*resgate/i,
-  /^total aplica/i,
+  /saldo anterior/i,
+  /\bs\s*a\s*l\s*d\s*o\b/i,
+  /saldo do dia/i,
+  /\bjuros\b/i,
+  /\biof\b/i,
+  /data de d[eé]bito/i,
+  /invest\.\s*resgate/i,
+  /total aplica/i,
 ];
 
 const CATEGORY_KEYWORDS = [
