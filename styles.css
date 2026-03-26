@@ -571,8 +571,9 @@ body {
 .td-desc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-favorecido { color: var(--text-secondary); font-size: 0.82rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-valor { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.td-valor.v-entrada { color: var(--positive); }
-.td-valor.v-saida   { color: var(--negative); }
+.td-valor.v-entrada  { color: var(--positive); }
+.td-valor.v-saida    { color: var(--negative); }
+.td-valor.v-interna  { color: #a5b4fc; }
 .td-center { text-align: center; }
 
 /* TYPE BADGE */
@@ -1026,6 +1027,11 @@ body {
   background: rgba(34,197,94,0.12);
   border-color: rgba(34,197,94,0.35);
   color: var(--positive);
+}
+.tipo-inline-select.tipo-interna {
+  background: rgba(99,102,241,0.12);
+  border-color: rgba(99,102,241,0.35);
+  color: #a5b4fc;
 }
 .tipo-inline-select.tipo-saida {
   background: rgba(244,63,94,0.12);

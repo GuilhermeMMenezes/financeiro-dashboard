@@ -24,7 +24,14 @@ const state = {
 const CATEGORIES = [
   'Fornecedores','Funcionários','Impostos','Marketing','Mídia',
   'Aluguel','Plataforma / Sistemas','Taxas Bancárias','Transferências',
-  'Retiradas','Pró-labore','Clientes / Recebimentos','Outros',
+  'Retiradas','Pró-labore','Clientes / Recebimentos','Transferência Interna','Outros',
+];
+
+// Linhas informativas do BB que devem ser ignoradas no import
+const BB_SKIP_PATTERNS = [
+  /^saldo anterior$/i, /^s\s*a\s*l\s*d\s*o$/i, /^saldo do dia$/i,
+  /^juros/i, /^iof/i, /^data de d[eé]bito/i, /invest\.\s*resgate/i,
+  /^total aplica/i,
 ];
 
 const CATEGORY_KEYWORDS = [
@@ -372,9 +379,9 @@ function findHeaderRow(rows) {
 function detectColumns(headers) {
   const map = { data: -1, descricao: -1, valor: -1, credito: -1, debito: -1, tipo: -1, favorecido: -1, saldo: -1 };
   const matchers = {
-    data:       ['data','date','dt.','dt ','lançamento','competência'],
+    data:       ['data','date','dt.','dt ','lançamento','competência','dt.movimento','dt. movimento','dt.balancete','dt. balancete'],
     descricao:  ['descrição','descricao','historico','histórico','memo','description','complemento','lançamento','lancamento','detalhe'],
-    valor:      ['valor','value','amount','montante'],
+    valor:      ['valor r$','valor','value','amount','montante'],
     credito:    ['crédito','credito','entrada','credit','receita','recebimento'],
     debito:     ['débito','debito','saída','debit','despesa','pagamento'],
     favorecido: ['favorecido','beneficiario','beneficiário','remetente','origin','destino','nome'],
@@ -402,9 +409,27 @@ function buildTransaction(row, colMap, idx) {
 
   if (!rawData && !rawDesc && !rawValor && !rawCredito && !rawDebito) return null;
 
+  // Ignora linhas informativas do BB (Saldo Anterior, S A L D O, Juros, IOF, etc.)
+  const descTxt = (rawDesc || '').trim();
+  if (BB_SKIP_PATTERNS.some(p => p.test(descTxt))) return null;
+
   const data = normalizeDate(rawData);
   const descricao = rawDesc || 'Sem descrição';
   const favorecido = rawFav || '';
+
+  // BB Rende Fácil → transferência interna (não é receita nem despesa operacional)
+  const descLower = descricao.toLowerCase();
+  if (/rende f[aá]cil|resgate autom|aplica[cç][aã]o autom/i.test(descLower)) {
+    const valor = parseBRNumber(rawValor);
+    if (valor === 0) return null;
+    return {
+      id: Date.now() + idx,
+      data, descricao, favorecido,
+      tipo: 'transferência interna',
+      categoria: 'Transferência Interna',
+      subcategoria: '', valor: Math.abs(valor), obs: '', bankId: null,
+    };
+  }
 
   let valor = 0, tipo = 'saída';
 
@@ -414,14 +439,20 @@ function buildTransaction(row, colMap, idx) {
     if (cred > 0)     { valor = cred; tipo = 'entrada'; }
     else if (deb > 0) { valor = deb;  tipo = 'saída'; }
   } else if (rawValor) {
-    const rawV = parseBRNumber(rawValor);
-    valor = Math.abs(rawV);
-    if (rawV !== 0) {
-      // Sinal do número tem prioridade absoluta: negativo = saída, positivo = entrada
-      tipo = rawV < 0 ? 'saída' : 'entrada';
-    } else if (rawTipo) {
-      const t = rawTipo.toLowerCase();
-      tipo = (t.includes('créd') || t.includes('cred') || t.includes('entrada') || t.includes('rec')) ? 'entrada' : 'saída';
+    // Detecta sufixo C/D do Banco do Brasil: "1.567,80 C" ou "1.567,80 D"
+    const cdMatch = rawValor.match(/([CD])\s*$/i);
+    if (cdMatch) {
+      valor = parseBRNumber(rawValor);
+      tipo  = cdMatch[1].toUpperCase() === 'C' ? 'entrada' : 'saída';
+    } else {
+      const rawV = parseBRNumber(rawValor);
+      valor = Math.abs(rawV);
+      if (rawV !== 0) {
+        tipo = rawV < 0 ? 'saída' : 'entrada';
+      } else if (rawTipo) {
+        const t = rawTipo.toLowerCase();
+        tipo = (t.includes('créd') || t.includes('cred') || t.includes('entrada') || t.includes('rec')) ? 'entrada' : 'saída';
+      }
     }
   }
 
@@ -722,6 +753,7 @@ function renderDashboard() {
 // ── KPIs ────────────────────────────────────────────────────
 function renderKPIs() {
   const txs = state.transactions;
+  // Transferências internas são excluídas dos totais operacionais
   const entradas = txs.filter(t => t.tipo === 'entrada');
   const saidas   = txs.filter(t => t.tipo === 'saída');
 
@@ -898,9 +930,10 @@ function renderTable() {
       <td class="td-favorecido" title="${escHtml(tx.favorecido || '')}">${escHtml(tx.favorecido || '') || '—'}</td>
       ${showBankCol ? `<td class="td-bank">${bankDot}${bankName}</td>` : ''}
       <td>
-        <select class="tipo-inline-select ${tx.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida'}" data-id="${tx.id}">
+        <select class="tipo-inline-select ${tx.tipo === 'entrada' ? 'tipo-entrada' : tx.tipo === 'transferência interna' ? 'tipo-interna' : 'tipo-saida'}" data-id="${tx.id}">
           <option value="entrada"${tx.tipo === 'entrada' ? ' selected' : ''}>▲ entrada</option>
           <option value="saída"${tx.tipo === 'saída' ? ' selected' : ''}>▼ saída</option>
+          <option value="transferência interna"${tx.tipo === 'transferência interna' ? ' selected' : ''}>⇄ transf. interna</option>
         </select>
       </td>
       <td class="td-cat-cell">
@@ -908,8 +941,8 @@ function renderTable() {
           ${CATEGORIES.map(c => `<option value="${c}"${c === tx.categoria ? ' selected' : ''}>${c}</option>`).join('')}
         </select>
       </td>
-      <td class="td-valor ${tx.tipo === 'entrada' ? 'v-entrada' : 'v-saida'}">
-        ${tx.tipo === 'entrada' ? '+' : '-'}${formatCurrency(tx.valor)}
+      <td class="td-valor ${tx.tipo === 'entrada' ? 'v-entrada' : tx.tipo === 'transferência interna' ? 'v-interna' : 'v-saida'}">
+        ${tx.tipo === 'entrada' ? '+' : tx.tipo === 'transferência interna' ? '⇄' : '-'}${formatCurrency(tx.valor)}
       </td>
       <td class="td-center">
         <button class="btn-edit" data-id="${tx.id}" title="Editar todos os campos">
@@ -944,7 +977,8 @@ function renderTable() {
       if (!tx) return;
       tx.tipo = e.target.value;
       addAiLearningExample(tx);
-      e.target.className = `tipo-inline-select ${tx.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida'} cat-saved`;
+      const tipoClass = tx.tipo === 'entrada' ? 'tipo-entrada' : tx.tipo === 'transferência interna' ? 'tipo-interna' : 'tipo-saida';
+      e.target.className = `tipo-inline-select ${tipoClass} cat-saved`;
       setTimeout(() => e.target.classList.remove('cat-saved'), 600);
       applyFilters();
     });
