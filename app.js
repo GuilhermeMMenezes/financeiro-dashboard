@@ -560,6 +560,9 @@ function tryParseTransactionLine(lineText, idx) {
   const dateMatch = lineText.match(dateRx);
   if (!dateMatch) return null;
 
+  // Ignora linhas informativas do BB
+  if (BB_SKIP_PATTERNS.some(p => p.test(lineText.trim()))) return null;
+
   const valueRx = /(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2})/g;
   const values  = [...lineText.matchAll(valueRx)];
   if (!values.length) return null;
@@ -572,12 +575,45 @@ function tryParseTransactionLine(lineText, idx) {
 
   description = description.replace(/\s{2,}/g, ' ').trim() || 'Sem descrição';
 
+  // BB Rende Fácil → transferência interna (detecta encoding correto e corrompido)
+  if (/rende f.{0,5}cil|rende facil/i.test(description) || /rende f.{0,5}cil|rende facil/i.test(lineText)) {
+    const txValueStr = values.length >= 2 ? values[values.length - 2][0] : values[0][0];
+    const valor = Math.abs(parseBRNumber(txValueStr));
+    if (valor === 0) return null;
+    return {
+      id: Date.now() + idx,
+      data: normalizeDate(dateMatch[1]),
+      descricao: 'BB Rende Fácil',
+      favorecido: '',
+      tipo: 'transferência interna',
+      categoria: 'Transferência Interna',
+      subcategoria: '', valor, obs: '', bankId: null,
+    };
+  }
+
+  // Pega o valor principal (penúltimo quando há saldo junto, ex: "1.567,80 D 0,00 C")
   const txValueStr = values.length >= 2 ? values[values.length - 2][0] : values[0][0];
+  const txValueEnd = values.length >= 2
+    ? values[values.length - 2].index + values[values.length - 2][0].length
+    : values[0].index + values[0][0].length;
+
+  // Detecta sufixo C/D do Banco do Brasil logo após o valor
+  const afterValue = lineText.slice(txValueEnd, txValueEnd + 4);
+  const cdMatch    = afterValue.match(/^\s*([CD])\b/i);
+
   const rawVal = parseBRNumber(txValueStr);
   const valor  = Math.abs(rawVal);
   if (valor === 0) return null;
 
-  const tipo = rawVal < 0 ? 'saída' : detectTipoFromText(lineText, description);
+  let tipo;
+  if (cdMatch) {
+    // C/D explícito tem prioridade máxima
+    tipo = cdMatch[1].toUpperCase() === 'C' ? 'entrada' : 'saída';
+  } else if (rawVal < 0) {
+    tipo = 'saída';
+  } else {
+    tipo = detectTipoFromText(lineText, description);
+  }
 
   return {
     id: Date.now() + idx,
