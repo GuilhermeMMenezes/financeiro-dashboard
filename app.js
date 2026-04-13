@@ -38,6 +38,20 @@ const BB_SKIP_PATTERNS = [
   /data de d[eé]bito/i,
   /invest\.\s*resgate/i,
   /total aplica/i,
+  // Banrisul
+  /saldo em conta/i,
+  /saldo na data/i,
+  /saldo ant/i,
+  /total de d[eé]bitos/i,
+  /total de cr[eé]ditos/i,
+  /\bper[ií]odo\b/i,
+  /movimentos do per[ií]odo/i,
+  /movimentos da conta/i,
+  /limite da conta/i,
+  /nome:\s/i,
+  /extrato emitido/i,
+  /identificac[aã]o:/i,
+  /para simples conferencia/i,
 ];
 
 const CATEGORY_KEYWORDS = [
@@ -530,9 +544,14 @@ async function parsePDF(buffer) {
   return { transactions: buildTransactionsFromPDFItems(allPageItems), text: fullText };
 }
 
+// Mapeia nome de mês PT para número
+const MONTH_PT = { jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12' };
+
 function buildTransactionsFromPDFItems(pages) {
   const transactions = [];
   let idx = 0;
+  let monthYearCtx = null; // { month: '03', year: '2026' } — contexto para datas incompletas (Banrisul)
+  let lastDateStr  = null; // última data normalizada — usada em linhas de continuação do Banrisul
 
   pages.forEach(items => {
     if (!items.length) return;
@@ -553,33 +572,70 @@ function buildTransactionsFromPDFItems(pages) {
 
     lines.forEach(lineItems => {
       const lineText = lineItems.map(i => i.text).join(' ');
-      const tx = tryParseTransactionLine(lineText, idx);
-      if (tx) { transactions.push(tx); idx++; }
+
+      // Detecta contexto de mês/ano de cabeçalhos (Banrisul, Sicredi, etc.)
+      // Ex: "MAR/2026", "MARÇO/2026", "Período: 01/03/2026"
+      const mNameMatch = lineText.match(/\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[\/\-\s](\d{4})\b/i);
+      if (mNameMatch) {
+        monthYearCtx = { month: MONTH_PT[mNameMatch[1].toLowerCase()], year: mNameMatch[2] };
+      }
+      // Ex: "Período: 01/03/2026 a 31/03/2026" — pega o mês/ano da data final
+      const periodMatch = lineText.match(/\b\d{2}\/(\d{2})\/(\d{4})\b/);
+      if (periodMatch && !mNameMatch) {
+        monthYearCtx = { month: periodMatch[1], year: periodMatch[2] };
+      }
+
+      const tx = tryParseTransactionLine(lineText, idx, monthYearCtx, lastDateStr);
+      if (tx) {
+        lastDateStr = tx.data; // persiste para linhas de continuação (Banrisul)
+        transactions.push(tx);
+        idx++;
+      }
     });
   });
 
   return transactions;
 }
 
-function tryParseTransactionLine(lineText, idx) {
+function tryParseTransactionLine(lineText, idx, monthYearCtx = null, lastDateStr = null) {
   const dateRx   = /\b(\d{2}[\/\-]\d{2}(?:[\/\-]\d{2,4})?)\b/;
-  const dateMatch = lineText.match(dateRx);
-  if (!dateMatch) return null;
+  let dateMatch  = lineText.match(dateRx);
+  let dateStr    = dateMatch ? dateMatch[1] : null;
 
-  // Ignora linhas informativas do BB
+  // Banrisul: linhas com apenas o dia (ex: "02 BANRICARD ALIMEN...")
+  let dayOnlyMatch = null;
+  if (!dateStr && monthYearCtx) {
+    dayOnlyMatch = lineText.match(/^(\d{2})\s+[A-ZÀ-Ú]/i);
+    if (dayOnlyMatch) {
+      dateStr = `${dayOnlyMatch[1]}/${monthYearCtx.month}/${monthYearCtx.year}`;
+    }
+  }
+  // Banrisul: linhas de continuação sem dia (ex: "VERO BANRI VISTA 257829 78,31")
+  // usam a data da última transação processada
+  if (!dateStr && lastDateStr) {
+    dateStr = lastDateStr;
+  }
+  if (!dateStr) return null;
+
+  // Ignora linhas informativas do BB / Banrisul
   if (BB_SKIP_PATTERNS.some(p => p.test(lineText.trim()))) return null;
 
-  const valueRx = /(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2})/g;
+  // Captura valores BR, incluindo trailing dash do Banrisul (ex: "924,93-")
+  const valueRx = /(-?\d{1,3}(?:\.\d{3})*,\d{2}-?|-?\d+,\d{2}-?)/g;
   const values  = [...lineText.matchAll(valueRx)];
   if (!values.length) return null;
 
-  const dateEnd       = dateMatch.index + dateMatch[0].length;
+  // Posição após a data na linha (para extrair descrição)
+  // dateMatch: posição real; dayOnly: 2 chars (o dia); continuação: 0 (começa do início)
+  const dateEnd       = dateMatch ? dateMatch.index + dateMatch[0].length
+                      : dayOnlyMatch ? 2 : 0;
   const firstValuePos = values[0].index;
   let description     = firstValuePos > dateEnd
     ? lineText.slice(dateEnd, firstValuePos).trim()
     : lineText.slice(dateEnd).replace(valueRx, '').trim();
 
-  description = description.replace(/\s{2,}/g, ' ').trim() || 'Sem descrição';
+  // Remove número de documento Banrisul (6 dígitos isolados, ex: "921140")
+  description = description.replace(/\b\d{5,7}\b/g, '').replace(/\s{2,}/g, ' ').trim() || 'Sem descrição';
 
   // BB Rende Fácil → transferência interna (detecta encoding correto e corrompido)
   if (/rende f.{0,5}cil|rende facil/i.test(description) || /rende f.{0,5}cil|rende facil/i.test(lineText)) {
@@ -588,7 +644,7 @@ function tryParseTransactionLine(lineText, idx) {
     if (valor === 0) return null;
     return {
       id: Date.now() + idx,
-      data: normalizeDate(dateMatch[1]),
+      data: normalizeDate(dateStr),
       descricao: 'BB Rende Fácil',
       favorecido: '',
       tipo: 'transferência interna',
@@ -598,17 +654,22 @@ function tryParseTransactionLine(lineText, idx) {
   }
 
   // Pega o valor principal (penúltimo quando há saldo junto, ex: "1.567,80 D 0,00 C")
-  const txValueStr = values.length >= 2 ? values[values.length - 2][0] : values[0][0];
-  const txValueEnd = values.length >= 2
-    ? values[values.length - 2].index + values[values.length - 2][0].length
-    : values[0].index + values[0][0].length;
+  const txValueIdx = values.length >= 2 ? values.length - 2 : 0;
+  const txValueStr = values[txValueIdx][0];
+  const txValuePos = values[txValueIdx].index;
+  const txValueEnd = txValuePos + txValueStr.length;
 
   // Detecta sufixo C/D do Banco do Brasil logo após o valor
   const afterValue = lineText.slice(txValueEnd, txValueEnd + 4);
   const cdMatch    = afterValue.match(/^\s*([CD])\b/i);
 
-  const rawVal = parseBRNumber(txValueStr);
-  const valor  = Math.abs(rawVal);
+  // Detecta sinal negativo antes de "R$" (PagBank: "-R$ 258,49")
+  const before = lineText.slice(Math.max(0, txValuePos - 8), txValuePos);
+  const precedingMinus = /(?:^|[\s(])-(?:R\$\s*)?$/.test(before);
+
+  let rawVal = parseBRNumber(txValueStr);
+  if (precedingMinus && rawVal > 0) rawVal = -rawVal;
+  const valor = Math.abs(rawVal);
   if (valor === 0) return null;
 
   let tipo;
@@ -623,7 +684,7 @@ function tryParseTransactionLine(lineText, idx) {
 
   return {
     id: Date.now() + idx,
-    data:         normalizeDate(dateMatch[1]),
+    data:         normalizeDate(dateStr),
     descricao:    description,
     favorecido:   '',
     tipo,
@@ -637,11 +698,15 @@ function tryParseTransactionLine(lineText, idx) {
 
 function detectTipoFromText(lineText, desc) {
   const t = lineText.toLowerCase();
-  if (/créd|credito|entrada|recebido|recebimento|depósito|deposito|cielo vendas|stone pagamento|rende fácil\s*\(?\+/.test(t)) return 'entrada';
-  if (/déb|debito|saída|saida|pagamento|retirada|enviado|boleto|tarifa|pgto/.test(t)) return 'saída';
-  const entradaKw = ['recebido','recebimento','deposito','depósito','pix receb','ted receb','cielo vendas','stone pagto'];
-  if (entradaKw.some(k => desc.toLowerCase().includes(k))) return 'entrada';
-  return 'saída';
+  const d = desc.toLowerCase();
+  // Sinais claros de ENTRADA (têm prioridade)
+  if (/créd|credito|entrada|recebido|recebimento|depósito|deposito|rende fácil\s*\(?\+|getnet|banricard|\bcielo\b|\bstone\b|\bvendas\b|\bvenda\b|rendimento da conta|transferência recebida|transf.*recebida/.test(t)) return 'entrada';
+  // Sinais inequívocos de SAÍDA (não inclui "debito" pois pode ser tipo de cartão como "GETNET DEBITO VISA")
+  if (/\bsaída\b|\bsaida\b|\bretirada\b|\bsaque\b|\bboleto\b|\btarifa\b|\biof\b|\benviado\b|pagamento de conta|mensalidade|cobrança seguro|qr code pix env/.test(t)) return 'saída';
+  const entradaKw = ['recebido','recebimento','deposito','depósito','pix receb','ted receb','cielo','getnet','banricard','stone','vendas'];
+  if (entradaKw.some(k => d.includes(k))) return 'entrada';
+  // Valor positivo sem sinal claro → presume entrada
+  return 'entrada';
 }
 
 // ============================================================
@@ -666,9 +731,13 @@ function parseBRNumber(str) {
   let s = String(str).replace(/[R$\s]/g, '').trim();
 
   // Detecta notação Banco do Brasil: "1.000,00(-)" ou "1.000,00(+)"
-  const bbNegative = s.includes('(-)') || s.includes('- ') ;
+  const bbNegative = s.includes('(-)') || s.includes('- ');
   const bbPositive = s.includes('(+)');
+  // Detecta trailing dash (Banrisul): "924,93-"
+  const trailingDash = /\d-$/.test(s);
+
   s = s.replace(/[()+]/g, '').replace('--', '').replace('- ', '');
+  if (trailingDash) s = s.replace(/-$/, '');
 
   if (s.includes(',') && s.includes('.')) {
     const lastComma = s.lastIndexOf(',');
@@ -679,7 +748,7 @@ function parseBRNumber(str) {
   }
 
   const num = parseFloat(s) || 0;
-  if (bbNegative) return -Math.abs(num);
+  if (bbNegative || trailingDash) return -Math.abs(num);
   if (bbPositive) return Math.abs(num);
   return num;
 }

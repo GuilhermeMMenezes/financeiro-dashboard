@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Financeiro</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===== UPLOAD SECTION ===== -->
+    <section id="upload-section">
+      <div class="upload-card" id="drop-zone">
+        <div class="upload-icon">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <h2>Importar Extrato Bancário</h2>
+        <p class="upload-subtitle">Arraste o arquivo aqui ou clique para selecionar</p>
+        <div class="upload-formats">
+          <span class="format-tag">CSV</span>
+          <span class="format-tag">Excel .xlsx</span>
+          <span class="format-tag">PDF</span>
+        </div>
+        <button class="btn-primary" id="btn-select-file">Selecionar Arquivo</button>
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.pdf" hidden />
+        <p class="upload-hint">Formatos suportados: Bradesco, Itaú, Nubank, Santander e formato genérico</p>
+      </div>
+    </section>
+
+    <!-- ===== DASHBOARD ===== -->
+    <div id="dashboard" class="hidden">
+
+      <!-- HEADER -->
+      <header class="dashboard-header">
+        <div class="header-left">
+          <div class="logo-mark"></div>
+          <div>
+            <h1 class="dashboard-title">Dashboard Financeiro</h1>
+            <p class="dashboard-subtitle" id="dashboard-subtitle">Carregando...</p>
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="btn-outline btn-sm" id="btn-reset-all">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+            Limpar Tudo
+          </button>
+        </div>
+      </header>
+
+      <!-- BANK TABS -->
+      <div class="bank-bar" id="bank-bar"></div>
+      <input type="file" id="file-input-add" accept=".csv,.xlsx,.xls,.pdf" hidden />
+
+      <!-- KPI CARDS -->
+      <section class="kpi-section">
+        <div class="kpi-card kpi-entrada">
+          <div class="kpi-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-label">Total de Entradas</span>
+            <span class="kpi-value positive" id="kpi-entradas">R$ 0,00</span>
+            <span class="kpi-sub" id="kpi-entradas-count">0 transações</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-saida">
+          <div class="kpi-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-label">Total de Saídas</span>
+            <span class="kpi-value negative" id="kpi-saidas">R$ 0,00</span>
+            <span class="kpi-sub" id="kpi-saidas-count">0 transações</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-saldo">
+          <div class="kpi-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-label">Saldo do Período</span>
+            <span class="kpi-value" id="kpi-saldo">R$ 0,00</span>
+            <span class="kpi-sub" id="kpi-saldo-status">—</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-total">
+          <div class="kpi-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-label">Total de Transações</span>
+            <span class="kpi-value accent" id="kpi-total">0</span>
+            <span class="kpi-sub" id="kpi-periodo">—</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHARTS ROW 1: MAIN DONUTS -->
+      <section class="charts-section">
+        <div class="chart-card chart-large">
+          <div class="chart-card-header">
+            <h3>Distribuição de Saídas</h3>
+            <span class="chart-badge badge-saida">por categoria</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-saidas"></canvas>
+            <div class="chart-center-label" id="chart-saidas-center">
+              <span class="center-value" id="center-saidas-value">R$ 0</span>
+              <span class="center-label">total saídas</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-card chart-large">
+          <div class="chart-card-header">
+            <h3>Distribuição de Entradas</h3>
+            <span class="chart-badge badge-entrada">por categoria</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-entradas"></canvas>
+            <div class="chart-center-label" id="chart-entradas-center">
+              <span class="center-value" id="center-entradas-value">R$ 0</span>
+              <span class="center-label">total entradas</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHARTS ROW 2: TOP CATEGORIES BAR -->
+      <section class="charts-section charts-section-secondary">
+        <div class="chart-card chart-bar-card">
+          <div class="chart-card-header">
+            <h3>Top Categorias de Saída</h3>
+            <span class="chart-badge">ranking</span>
+          </div>
+          <div class="chart-wrapper chart-wrapper-bar">
+            <canvas id="chart-top-saidas"></canvas>
+          </div>
+        </div>
+        <div class="chart-card chart-bar-card">
+          <div class="chart-card-header">
+            <h3>Top Categorias de Entrada</h3>
+            <span class="chart-badge">ranking</span>
+          </div>
+          <div class="chart-wrapper chart-wrapper-bar">
+            <canvas id="chart-top-entradas"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRANSACTIONS TABLE -->
+      <section class="transactions-section">
+        <div class="transactions-header">
+          <div class="transactions-header-left">
+            <h2>Transações</h2>
+            <span class="transactions-count" id="transactions-count">0 registros</span>
+          </div>
+          <div class="transactions-header-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="search-input" placeholder="Buscar transação..." class="search-input" />
+            </div>
+            <button class="btn-ai btn-sm" id="btn-classify-ai" title="Classificar tipo e categoria com Inteligência Artificial">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Classificar com IA
+            </button>
+            <button class="btn-outline btn-sm btn-icon-only" id="btn-ai-settings" title="Configurar chave da API de IA">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+            <button class="btn-outline btn-sm" id="btn-export">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Exportar CSV
+            </button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="transactions-table" id="transactions-table">
+            <thead>
+              <tr>
+                <th class="sortable" data-col="data">Data <span class="sort-icon">↕</span></th>
+                <th>Descrição</th>
+                <th>Favorecido</th>
+                <th class="sortable" data-col="tipo">Tipo <span class="sort-icon">↕</span></th>
+                <th class="sortable" data-col="categoria">Categoria <span class="sort-icon">↕</span></th>
+                <th class="sortable th-right" data-col="valor">Valor <span class="sort-icon">↕</span></th>
+                <th class="th-center">Editar</th>
+              </tr>
+            </thead>
+            <tbody id="transactions-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="table-showing">Mostrando 0 de 0 transações</span>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </section>
+
+    </div><!-- /dashboard -->
+  </div><!-- /app -->
+
+  <!-- ===== EDIT MODAL ===== -->
+  <div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Editar Transação</h3>
+        <button class="modal-close" id="modal-close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-id" />
+        <div class="form-row">
+          <div class="form-group">
+            <label>Data</label>
+            <input type="text" id="edit-data" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Tipo</label>
+            <select id="edit-tipo" class="form-input">
+              <option value="entrada">▲ Entrada</option>
+              <option value="saída">▼ Saída</option>
+              <option value="transferência interna">⇄ Transferência Interna</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="edit-descricao" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label>Favorecido / Remetente</label>
+          <input type="text" id="edit-favorecido" class="form-input" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Categoria</label>
+            <select id="edit-categoria" class="form-input">
+              <option value="Fornecedores">Fornecedores</option>
+              <option value="Funcionários">Funcionários</option>
+              <option value="Impostos">Impostos</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Mídia">Mídia</option>
+              <option value="Aluguel">Aluguel</option>
+              <option value="Plataforma / Sistemas">Plataforma / Sistemas</option>
+              <option value="Taxas Bancárias">Taxas Bancárias</option>
+              <option value="Transferências">Transferências</option>
+              <option value="Retiradas">Retiradas</option>
+              <option value="Pró-labore">Pró-labore</option>
+              <option value="Clientes / Recebimentos">Clientes / Recebimentos</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Subcategoria</label>
+            <input type="text" id="edit-subcategoria" class="form-input" placeholder="Opcional" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="edit-valor" class="form-input" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea id="edit-obs" class="form-input form-textarea" rows="2" placeholder="Opcional"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="btn-cancel-edit">Cancelar</button>
+        <button class="btn-primary" id="btn-save-edit">Salvar Alterações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENAME BANK MODAL -->
+  <div id="rename-modal" class="modal-overlay hidden">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h3>Nome do Banco</h3>
+        <button class="modal-close" id="rename-modal-close" onclick="document.getElementById('rename-modal').classList.add('hidden')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Identificação deste banco / extrato</label>
+          <input type="text" id="rename-input" class="form-input" placeholder="Ex: Itaú, Nubank, Bradesco..." />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="rename-cancel">Cancelar</button>
+        <button class="btn-primary" id="rename-save">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI KEY MODAL -->
+  <div id="ai-key-modal" class="modal-overlay hidden">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h3>Configurar IA de Classificação</h3>
+        <button class="modal-close" onclick="document.getElementById('ai-key-modal').classList.add('hidden')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="ai-info-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p>A IA usa o modelo Claude (Anthropic) para classificar tipo (entrada/saída) e categoria de cada transação. Ela aprende com suas correções ao longo do tempo.</p>
+        </div>
+        <div class="form-group" style="margin-top:1rem">
+          <label>Chave da API Anthropic</label>
+          <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-..." autocomplete="off" />
+          <span class="form-hint">Sua chave fica salva <strong>apenas no seu navegador</strong> (localStorage). Nunca é enviada a nenhum servidor além da Anthropic.</span>
+        </div>
+        <div class="ai-learning-info" id="ai-learning-info"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="document.getElementById('ai-key-modal').classList.add('hidden')">Cancelar</button>
+        <button class="btn-ghost btn-danger-sm" id="btn-clear-learning" title="Apagar todos os exemplos de aprendizado">Limpar Aprendizado</button>
+        <button class="btn-primary" id="btn-save-ai-key">Salvar e Classificar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
