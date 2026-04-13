@@ -632,17 +632,22 @@ function tryParseTransactionLine(lineText, idx, monthYearCtx = null) {
   }
 
   // Pega o valor principal (penúltimo quando há saldo junto, ex: "1.567,80 D 0,00 C")
-  const txValueStr = values.length >= 2 ? values[values.length - 2][0] : values[0][0];
-  const txValueEnd = values.length >= 2
-    ? values[values.length - 2].index + values[values.length - 2][0].length
-    : values[0].index + values[0][0].length;
+  const txValueIdx = values.length >= 2 ? values.length - 2 : 0;
+  const txValueStr = values[txValueIdx][0];
+  const txValuePos = values[txValueIdx].index;
+  const txValueEnd = txValuePos + txValueStr.length;
 
   // Detecta sufixo C/D do Banco do Brasil logo após o valor
   const afterValue = lineText.slice(txValueEnd, txValueEnd + 4);
   const cdMatch    = afterValue.match(/^\s*([CD])\b/i);
 
-  const rawVal = parseBRNumber(txValueStr);
-  const valor  = Math.abs(rawVal);
+  // Detecta sinal negativo antes de "R$" (PagBank: "-R$ 258,49")
+  const before = lineText.slice(Math.max(0, txValuePos - 8), txValuePos);
+  const precedingMinus = /(?:^|[\s(])-(?:R\$\s*)?$/.test(before);
+
+  let rawVal = parseBRNumber(txValueStr);
+  if (precedingMinus && rawVal > 0) rawVal = -rawVal;
+  const valor = Math.abs(rawVal);
   if (valor === 0) return null;
 
   let tipo;
@@ -673,9 +678,9 @@ function detectTipoFromText(lineText, desc) {
   const t = lineText.toLowerCase();
   const d = desc.toLowerCase();
   // Sinais claros de ENTRADA (têm prioridade)
-  if (/créd|credito|entrada|recebido|recebimento|depósito|deposito|rende fácil\s*\(?\+|getnet|banricard|\bcielo\b|\bstone\b|\bvendas\b|\bvenda\b/.test(t)) return 'entrada';
+  if (/créd|credito|entrada|recebido|recebimento|depósito|deposito|rende fácil\s*\(?\+|getnet|banricard|\bcielo\b|\bstone\b|\bvendas\b|\bvenda\b|rendimento da conta|transferência recebida|transf.*recebida/.test(t)) return 'entrada';
   // Sinais inequívocos de SAÍDA (não inclui "debito" pois pode ser tipo de cartão como "GETNET DEBITO VISA")
-  if (/\bsaída\b|\bsaida\b|\bretirada\b|\bsaque\b|\bboleto\b|\btarifa\b|\biof\b|pagamento a /.test(t)) return 'saída';
+  if (/\bsaída\b|\bsaida\b|\bretirada\b|\bsaque\b|\bboleto\b|\btarifa\b|\biof\b|\benviado\b|pagamento de conta|mensalidade|cobrança seguro|qr code pix env/.test(t)) return 'saída';
   const entradaKw = ['recebido','recebimento','deposito','depósito','pix receb','ted receb','cielo','getnet','banricard','stone','vendas'];
   if (entradaKw.some(k => d.includes(k))) return 'entrada';
   // Valor positivo sem sinal claro → presume entrada
