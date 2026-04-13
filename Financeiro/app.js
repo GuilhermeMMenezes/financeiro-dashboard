@@ -40,10 +40,18 @@ const BB_SKIP_PATTERNS = [
   /total aplica/i,
   // Banrisul
   /saldo em conta/i,
+  /saldo na data/i,
+  /saldo ant/i,
   /total de d[eé]bitos/i,
   /total de cr[eé]ditos/i,
   /\bper[ií]odo\b/i,
   /movimentos do per[ií]odo/i,
+  /movimentos da conta/i,
+  /limite da conta/i,
+  /nome:\s/i,
+  /extrato emitido/i,
+  /identificac[aã]o:/i,
+  /para simples conferencia/i,
 ];
 
 const CATEGORY_KEYWORDS = [
@@ -543,6 +551,7 @@ function buildTransactionsFromPDFItems(pages) {
   const transactions = [];
   let idx = 0;
   let monthYearCtx = null; // { month: '03', year: '2026' } — contexto para datas incompletas (Banrisul)
+  let lastDateStr  = null; // última data normalizada — usada em linhas de continuação do Banrisul
 
   pages.forEach(items => {
     if (!items.length) return;
@@ -576,25 +585,35 @@ function buildTransactionsFromPDFItems(pages) {
         monthYearCtx = { month: periodMatch[1], year: periodMatch[2] };
       }
 
-      const tx = tryParseTransactionLine(lineText, idx, monthYearCtx);
-      if (tx) { transactions.push(tx); idx++; }
+      const tx = tryParseTransactionLine(lineText, idx, monthYearCtx, lastDateStr);
+      if (tx) {
+        lastDateStr = tx.data; // persiste para linhas de continuação (Banrisul)
+        transactions.push(tx);
+        idx++;
+      }
     });
   });
 
   return transactions;
 }
 
-function tryParseTransactionLine(lineText, idx, monthYearCtx = null) {
+function tryParseTransactionLine(lineText, idx, monthYearCtx = null, lastDateStr = null) {
   const dateRx   = /\b(\d{2}[\/\-]\d{2}(?:[\/\-]\d{2,4})?)\b/;
   let dateMatch  = lineText.match(dateRx);
   let dateStr    = dateMatch ? dateMatch[1] : null;
 
   // Banrisul: linhas com apenas o dia (ex: "02 BANRICARD ALIMEN...")
+  let dayOnlyMatch = null;
   if (!dateStr && monthYearCtx) {
-    const dayOnly = lineText.match(/^(\d{2})\s+[A-ZÀ-Ú]/i);
-    if (dayOnly) {
-      dateStr = `${dayOnly[1]}/${monthYearCtx.month}/${monthYearCtx.year}`;
+    dayOnlyMatch = lineText.match(/^(\d{2})\s+[A-ZÀ-Ú]/i);
+    if (dayOnlyMatch) {
+      dateStr = `${dayOnlyMatch[1]}/${monthYearCtx.month}/${monthYearCtx.year}`;
     }
+  }
+  // Banrisul: linhas de continuação sem dia (ex: "VERO BANRI VISTA 257829 78,31")
+  // usam a data da última transação processada
+  if (!dateStr && lastDateStr) {
+    dateStr = lastDateStr;
   }
   if (!dateStr) return null;
 
@@ -607,13 +626,16 @@ function tryParseTransactionLine(lineText, idx, monthYearCtx = null) {
   if (!values.length) return null;
 
   // Posição após a data na linha (para extrair descrição)
-  const dateEnd       = dateMatch ? dateMatch.index + dateMatch[0].length : 2;
+  // dateMatch: posição real; dayOnly: 2 chars (o dia); continuação: 0 (começa do início)
+  const dateEnd       = dateMatch ? dateMatch.index + dateMatch[0].length
+                      : dayOnlyMatch ? 2 : 0;
   const firstValuePos = values[0].index;
   let description     = firstValuePos > dateEnd
     ? lineText.slice(dateEnd, firstValuePos).trim()
     : lineText.slice(dateEnd).replace(valueRx, '').trim();
 
-  description = description.replace(/\s{2,}/g, ' ').trim() || 'Sem descrição';
+  // Remove número de documento Banrisul (6 dígitos isolados, ex: "921140")
+  description = description.replace(/\b\d{5,7}\b/g, '').replace(/\s{2,}/g, ' ').trim() || 'Sem descrição';
 
   // BB Rende Fácil → transferência interna (detecta encoding correto e corrompido)
   if (/rende f.{0,5}cil|rende facil/i.test(description) || /rende f.{0,5}cil|rende facil/i.test(lineText)) {
