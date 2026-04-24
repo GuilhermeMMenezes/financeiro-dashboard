@@ -18,6 +18,8 @@ const state = {
   searchQuery: '',
   editingId:   null,
   renamingBankId: null,
+  activeView:  'dashboard',
+  dreMonth:    '',
 };
 
 // ── Categories ───────────────────────────────────────────────
@@ -80,6 +82,18 @@ const BANK_COLORS = [
   '#22c55e','#ec4899','#3b82f6','#14b8a6','#f97316',
 ];
 
+const MONTH_NAMES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const DRE_LINES = [
+  { key: 'receita',   label: 'Receita Bruta',          type: 'header',   cats: null },
+  { key: 'cmv',       label: '(-) CMV',                type: 'cost',     cats: ['Fornecedores'] },
+  { key: 'lucro',     label: 'Lucro Bruto',            type: 'subtotal', cats: null },
+  { key: 'cmo',       label: '(-) CMO',                type: 'cost',     cats: ['Funcionários','Pró-labore'] },
+  { key: 'midia',     label: '(-) Custo de Mídia',     type: 'cost',     cats: ['Marketing','Mídia'] },
+  { key: 'outros',    label: '(-) Outros Custos',      type: 'cost',     cats: ['Aluguel','Plataforma / Sistemas','Impostos','Taxas Bancárias','Outros','Retiradas','Transferências'] },
+  { key: 'resultado', label: 'Resultado Operacional',  type: 'result',   cats: null },
+];
+
 // ── DOM Helpers ──────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -93,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSort();
   setupExport();
   setupAI();
+  setupViewTabs();
   $('#btn-reset-all').addEventListener('click', confirmReset);
 });
 
@@ -805,6 +820,7 @@ function applyFilters() {
 
   state.transactions = sortTransactions(txs, state.sortCol, state.sortDir);
   renderDashboard();
+  if (state.activeView === 'dre') renderDRE();
 }
 
 // ============================================================
@@ -854,6 +870,136 @@ function setupSearch() {
 
 // ============================================================
 // RENDER DASHBOARD
+// ============================================================
+// VIEW TABS
+// ============================================================
+function setupViewTabs() {
+  $$('.view-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      state.activeView = view;
+      $$('.view-tab').forEach(b => b.classList.remove('view-tab-active'));
+      btn.classList.add('view-tab-active');
+      $('#dashboard-view').classList.toggle('hidden', view !== 'dashboard');
+      $('#dre-section').classList.toggle('hidden', view !== 'dre');
+      if (view === 'dre') renderDRE();
+    });
+  });
+}
+
+// ============================================================
+// DRE
+// ============================================================
+function computeDREValues(month) {
+  const txs = state.allTransactions.filter(t =>
+    t.tipo !== 'transferência interna' && t.data && t.data.slice(0, 7) === month
+  );
+  const sumCats = (cats) => txs
+    .filter(t => t.tipo === 'saída' && cats.some(c => t.categoria === c))
+    .reduce((s, t) => s + t.valor, 0);
+
+  const receita = txs.filter(t => t.tipo === 'entrada').reduce((s, t) => s + t.valor, 0);
+  const cmv     = sumCats(['Fornecedores']);
+  const cmo     = sumCats(['Funcionários', 'Pró-labore']);
+  const midia   = sumCats(['Marketing', 'Mídia']);
+  const outros  = sumCats(['Aluguel', 'Plataforma / Sistemas', 'Impostos', 'Taxas Bancárias', 'Outros', 'Retiradas', 'Transferências']);
+  const lucro   = receita - cmv;
+  const resultado = receita - cmv - cmo - midia - outros;
+  return { receita, cmv, lucro, cmo, midia, outros, resultado };
+}
+
+function prevMonth(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+function renderDRE() {
+  // Populate month selector from available months
+  const months = [...new Set(
+    state.allTransactions
+      .filter(t => t.data)
+      .map(t => t.data.slice(0, 7))
+  )].sort().reverse();
+
+  const sel = $('#dre-month-select');
+  const cur = sel.value || state.dreMonth || months[0] || '';
+  sel.innerHTML = months.map(m => {
+    const [y, mo] = m.split('-');
+    const name = `${MONTH_NAMES_PT[parseInt(mo, 10) - 1]} ${y}`;
+    return `<option value="${m}" ${m === cur ? 'selected' : ''}>${name}</option>`;
+  }).join('');
+  sel.onchange = () => { state.dreMonth = sel.value; renderDRE(); };
+  state.dreMonth = sel.value || cur;
+
+  if (!state.dreMonth) return;
+
+  const [y, mo] = state.dreMonth.split('-');
+  const monthLabel = `${MONTH_NAMES_PT[parseInt(mo, 10) - 1]} ${y}`;
+  $('#dre-subtitle').textContent = monthLabel;
+
+  const curr = computeDREValues(state.dreMonth);
+  const prev = computeDREValues(prevMonth(state.dreMonth));
+
+  // Summary cards
+  const pct = (v) => curr.receita > 0 ? ((v / curr.receita) * 100).toFixed(1) + '%' : '—';
+  const varVs = (a, b) => {
+    if (b === 0) return '';
+    const d = ((a - b) / b) * 100;
+    return `<span class="${d >= 0 ? 'dre-var-pos' : 'dre-var-neg'}">${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}% vs mês ant.</span>`;
+  };
+
+  const totalCustos = curr.cmv + curr.cmo + curr.midia + curr.outros;
+  $('#dsum-receita').textContent     = formatCurrency(curr.receita);
+  $('#dsum-receita-vs').innerHTML    = varVs(curr.receita, prev.receita) || '—';
+  $('#dsum-custos').textContent      = formatCurrency(totalCustos);
+  $('#dsum-custos-pct').textContent  = curr.receita > 0 ? pct(totalCustos) + ' da receita' : '—';
+  $('#dsum-resultado').textContent   = formatCurrency(curr.resultado);
+  $('#dsum-resultado-pct').textContent = curr.receita > 0 ? pct(curr.resultado) + ' da receita' : '—';
+  const resCard = $('#dsum-resultado-card');
+  resCard.classList.toggle('dre-sum-positivo', curr.resultado >= 0);
+  resCard.classList.toggle('dre-sum-negativo', curr.resultado < 0);
+
+  // Detail table
+  const tbody = $('#dre-tbody');
+  const [py, pm] = prevMonth(state.dreMonth).split('-');
+  const prevLabel = `${MONTH_NAMES_PT[parseInt(pm, 10) - 1].slice(0, 3)}/${py}`;
+
+  const fmtDiff = (cur, prv) => {
+    if (prv === 0 && cur === 0) return '<span class="dre-nd">—</span>';
+    if (prv === 0) return '<span class="dre-nd">N/D</span>';
+    const d = cur - prv;
+    const p = ((d / prv) * 100).toFixed(1);
+    const cls = d >= 0 ? 'dre-var-pos' : 'dre-var-neg';
+    return `<span class="${cls}">${d >= 0 ? '+' : ''}${p}%</span>`;
+  };
+
+  tbody.innerHTML = DRE_LINES.map(line => {
+    const v  = curr[line.key];
+    const vp = prev[line.key];
+    const isSubtotal = line.type === 'subtotal' || line.type === 'result' || line.type === 'header';
+    const isCost     = line.type === 'cost';
+    const isResult   = line.type === 'result';
+    const rowClass   = `dre-row-${line.type}`;
+
+    const pctStr  = (curr.receita > 0 && v !== undefined)
+      ? ((Math.abs(v) / curr.receita) * 100).toFixed(1) + '%' : '—';
+    const prevStr = vp !== undefined ? formatCurrency(vp) : '—';
+    const varStr  = (v !== undefined && vp !== undefined) ? fmtDiff(v, vp) : '—';
+
+    const valClass = isResult
+      ? (v >= 0 ? 'dre-val-pos' : 'dre-val-neg')
+      : isCost ? 'dre-val-cost' : 'dre-val-main';
+
+    return `<tr class="${rowClass}">
+      <td class="dre-td-linha${isCost ? ' dre-indent' : ''}">${line.label}</td>
+      <td class="dre-td-num ${valClass}">${formatCurrency(v)}</td>
+      <td class="dre-td-num dre-pct">${isSubtotal || line.type === 'header' ? pctStr : isCost ? pctStr : pctStr}</td>
+      <td class="dre-td-num dre-prev">${prevStr}</td>
+      <td class="dre-td-num">${isSubtotal || line.type === 'header' ? '' : varStr}</td>
+    </tr>`;
+  }).join('');
+}
+
 // ============================================================
 function renderDashboard() {
   renderKPIs();

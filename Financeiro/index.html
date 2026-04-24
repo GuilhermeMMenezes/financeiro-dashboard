@@ -63,6 +63,29 @@
       <div class="bank-bar" id="bank-bar"></div>
       <input type="file" id="file-input-add" accept=".csv,.xlsx,.xls,.pdf" hidden />
 
+      <!-- VIEW TABS -->
+      <nav class="view-tabs" id="view-tabs">
+        <button class="view-tab view-tab-active" data-view="dashboard">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          Dashboard
+        </button>
+        <button class="view-tab" data-view="dre">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+            <line x1="8" y1="9" x2="10" y2="9"/>
+          </svg>
+          DRE
+        </button>
+      </nav>
+
+      <!-- DASHBOARD VIEW -->
+      <div id="dashboard-view">
+
       <!-- KPI CARDS -->
       <section class="kpi-section">
         <div class="kpi-card kpi-entrada">
@@ -230,6 +253,65 @@
           <div class="pagination" id="pagination"></div>
         </div>
       </section>
+
+      </div><!-- /dashboard-view -->
+
+      <!-- DRE SECTION -->
+      <div id="dre-section" class="dre-section hidden">
+        <div class="dre-controls">
+          <div class="dre-controls-left">
+            <h2 class="dre-title">DRE — Demonstração do Resultado</h2>
+            <p class="dre-subtitle" id="dre-subtitle">Selecione um período</p>
+          </div>
+          <div class="dre-controls-right">
+            <label class="dre-label">Período</label>
+            <select id="dre-month-select" class="dre-select"></select>
+          </div>
+        </div>
+
+        <!-- SUMMARY CARDS -->
+        <div class="dre-summary" id="dre-summary">
+          <div class="dre-sum-card dre-sum-receita">
+            <span class="dre-sum-label">Receita Bruta</span>
+            <span class="dre-sum-value" id="dsum-receita">R$ 0,00</span>
+            <span class="dre-sum-pct" id="dsum-receita-vs">—</span>
+          </div>
+          <div class="dre-sum-card dre-sum-custos">
+            <span class="dre-sum-label">Total de Custos</span>
+            <span class="dre-sum-value" id="dsum-custos">R$ 0,00</span>
+            <span class="dre-sum-pct" id="dsum-custos-pct">—% da receita</span>
+          </div>
+          <div class="dre-sum-card dre-sum-resultado" id="dsum-resultado-card">
+            <span class="dre-sum-label">Resultado Operacional</span>
+            <span class="dre-sum-value" id="dsum-resultado">R$ 0,00</span>
+            <span class="dre-sum-pct" id="dsum-resultado-pct">—% da receita</span>
+          </div>
+        </div>
+
+        <!-- DETAIL TABLE -->
+        <div class="dre-table-wrapper">
+          <table class="dre-table">
+            <thead>
+              <tr>
+                <th class="dre-th-linha">Linha</th>
+                <th class="dre-th-num">Valor</th>
+                <th class="dre-th-num">% Receita</th>
+                <th class="dre-th-num">Mês Anterior</th>
+                <th class="dre-th-num">Variação</th>
+              </tr>
+            </thead>
+            <tbody id="dre-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- LEGEND -->
+        <div class="dre-legend">
+          <span><strong>CMV</strong> = Fornecedores</span>
+          <span><strong>CMO</strong> = Funcionários + Pró-labore</span>
+          <span><strong>Mídia</strong> = Marketing + Mídia</span>
+          <span><strong>Outros</strong> = Aluguel, Impostos, Sistemas, Taxas, Retiradas</span>
+        </div>
+      </div><!-- /dre-section -->
 
     </div><!-- /dashboard -->
   </div><!-- /app -->

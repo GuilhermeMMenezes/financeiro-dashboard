@@ -1108,3 +1108,196 @@ body {
   color: var(--negative); border-color: rgba(244,63,94,0.3);
 }
 .btn-danger-sm:hover { background: rgba(244,63,94,0.1); }
+
+/* ============================================================
+   VIEW TABS
+   ============================================================ */
+.view-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 2rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 1.1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.view-tab:hover {
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.04);
+}
+.view-tab-active {
+  background: var(--accent-glow);
+  border-color: rgba(163,230,53,0.35);
+  color: var(--accent) !important;
+}
+
+/* ============================================================
+   DRE SECTION
+   ============================================================ */
+.dre-section {
+  padding: 1.5rem 2rem 3rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.dre-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.dre-controls-left {}
+.dre-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.dre-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+.dre-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dre-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.dre-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-hover);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+.dre-select:focus { border-color: var(--accent); }
+
+/* Summary cards */
+.dre-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.dre-sum-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.dre-sum-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.dre-sum-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.dre-sum-pct {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.dre-sum-receita  { border-color: rgba(34,197,94,0.25); }
+.dre-sum-receita .dre-sum-value { color: var(--positive); }
+.dre-sum-custos   { border-color: rgba(244,63,94,0.2); }
+.dre-sum-custos .dre-sum-value { color: var(--negative); }
+.dre-sum-resultado { border-color: var(--border); }
+.dre-sum-positivo { border-color: rgba(163,230,53,0.3) !important; }
+.dre-sum-positivo .dre-sum-value { color: var(--accent) !important; }
+.dre-sum-negativo { border-color: rgba(244,63,94,0.3) !important; }
+.dre-sum-negativo .dre-sum-value { color: var(--negative) !important; }
+
+/* Detail table */
+.dre-table-wrapper {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.dre-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.dre-table thead {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.dre-th-linha { text-align: left;  padding: 0.75rem 1.25rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.dre-th-num   { text-align: right; padding: 0.75rem 1.25rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.dre-td-linha { padding: 0.7rem 1.25rem; color: var(--text-primary); font-weight: 500; }
+.dre-td-num   { padding: 0.7rem 1.25rem; text-align: right; font-variant-numeric: tabular-nums; }
+.dre-indent   { padding-left: 2.5rem !important; color: var(--text-secondary) !important; font-weight: 400 !important; }
+
+.dre-row-header   { background: rgba(163,230,53,0.04); border-bottom: 1px solid var(--border); }
+.dre-row-header td { font-weight: 700 !important; color: var(--text-primary) !important; border-bottom: 1px solid rgba(163,230,53,0.15); }
+.dre-row-cost     { border-bottom: 1px solid rgba(255,255,255,0.04); }
+.dre-row-cost:hover { background: rgba(255,255,255,0.02); }
+.dre-row-subtotal { background: var(--bg-secondary); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.dre-row-subtotal td { font-weight: 600 !important; }
+.dre-row-result   { background: rgba(163,230,53,0.06); border-top: 2px solid rgba(163,230,53,0.25); }
+.dre-row-result td { font-weight: 700 !important; font-size: 0.95rem; }
+
+.dre-val-main { color: var(--text-primary); }
+.dre-val-cost { color: var(--negative); }
+.dre-val-pos  { color: var(--accent); }
+.dre-val-neg  { color: var(--negative); }
+.dre-pct      { color: var(--text-muted); font-size: 0.8rem; }
+.dre-prev     { color: var(--text-muted); font-size: 0.82rem; }
+.dre-nd       { color: var(--text-muted); }
+
+.dre-var-pos  { color: var(--positive); font-weight: 600; font-size: 0.82rem; }
+.dre-var-neg  { color: var(--negative); font-weight: 600; font-size: 0.82rem; }
+
+/* Legend */
+.dre-legend {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0.25rem;
+}
+.dre-legend strong { color: var(--text-secondary); }
+
+@media (max-width: 768px) {
+  .dre-section { padding: 1rem; }
+  .dre-summary { grid-template-columns: 1fr; }
+  .dre-table { font-size: 0.8rem; }
+  .dre-th-num:nth-child(4), .dre-th-num:nth-child(5),
+  .dre-td-num:nth-child(4), .dre-td-num:nth-child(5) { display: none; }
+}
